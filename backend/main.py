@@ -39,8 +39,8 @@ TABLAS = {
                   "correo", "direccion", "numero_afiliado", "tipo_sangre"],
     "citas": ["paciente_id", "fecha", "hora", "motivo"],
     "evaluaciones": ["paciente_id", "fecha", "texto"],
-    "estudios_imagenes": ["paciente_id", "fecha", "tipo", "estado", "informe"],
-    "cirugias": ["paciente_id", "fecha", "procedimiento", "estado"],
+    "estudios_imagenes": ["paciente_id", "fecha", "tipo", "estado", "informe", "region", "miniatura"],
+    "cirugias": ["paciente_id", "fecha", "procedimiento", "estado", "implante"],
     "implantes": ["cirugia_id", "paciente_id", "descripcion", "lote"],
     "pt_sesiones": ["paciente_id", "fecha", "descripcion", "dolor"],
     "formularios_proms": ["paciente_id", "fecha", "cuestionario", "puntaje"],
@@ -465,6 +465,45 @@ def datos(tabla: str | None = None, q: str = "", pagina: int = Query(1, ge=1),
         filas = c.execute(f"select {cols} from {tabla}{where} order by id desc limit %s offset %s",
                           args + [limite, (pagina - 1) * limite]).fetchall()
     return {"tabla": tabla, "total": total, "pagina": pagina, "filas": filas}
+
+
+@app.get("/api/todo")
+def todo(u=Depends(usuario_actual)):
+    """Todas las tablas que el rol puede leer, en una sola llamada (para el front-end)."""
+    out = {}
+    with pool.connection() as c:
+        for t, cols in TABLAS.items():
+            if not puede(u["rol"], "leer", t):
+                continue
+            extra = ["verificado_por", "verificado_en"] if t in VERIFICABLES else []
+            if t == "documentos":
+                extra.append("(archivo is not null) as tiene")
+            sel = ",".join(["id"] + cols + extra)
+            out[t] = c.execute(f"select {sel} from {t} order by id").fetchall()
+        if puede(u["rol"], "leer", "estudios_imagenes"):
+            out["_imagenes"] = c.execute(
+                "select id, estudio_id from imagenes_estudio order by id").fetchall()
+    return out
+
+
+@app.get("/api/medicos")
+def medicos(u=Depends(usuario_actual)):
+    """Nombres de los médicos activos, para los selectores del front-end."""
+    with pool.connection() as c:
+        return {"medicos": [r["nombre"] for r in c.execute(
+            "select nombre from usuarios where rol='medico' and activo order by nombre").fetchall()]}
+
+
+@app.delete("/api/datos/{tabla}/{rid}")
+def borrar(tabla: str, rid: int, u=Depends(usuario_actual)):
+    """Elimina un registro. Las tablas hijas caen por la llave foránea en cascada."""
+    exigir(u, "escribir", tabla)
+    with pool.connection() as c:
+        r = c.execute(f"delete from {tabla} where id=%s returning id", (rid,)).fetchone()
+        if not r:
+            raise HTTPException(404, "Registro no encontrado")
+        auditar(c, u, "eliminar", tabla, rid)
+    return {"ok": True}
 
 
 @app.get("/api/paciente/{pid}")

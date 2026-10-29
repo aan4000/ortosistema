@@ -121,3 +121,6 @@ alter table documentos add column if not exists fecha date default current_date;
 alter table documentos add column if not exists archivo bytea;
 alter table documentos add column if not exists mime text;
 alter table documentos add column if not exists tamano int;
+alter table estudios_imagenes add column if not exists region text;
+alter table estudios_imagenes add column if not exists miniatura text;
+alter table cirugias add column if not exists implante text;
