@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: ortosistema
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/salud
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.11"
+      - key: AUTO_SCHEMA
+        value: "1"
+      - key: JWT_HORAS
+        value: "8"
+      # Se piden al crear el servicio en Render; no van en el repositorio.
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
